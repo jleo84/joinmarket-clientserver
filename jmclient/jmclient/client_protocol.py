@@ -579,11 +579,12 @@ def start_reactor(host, port, factory, ish=True, daemon=False, rs=True,
         # the protocol server at port+1
         if p2ep:
             port += 1
-    if usessl:
-        ctx = ClientContextFactory()
-        reactor.connectSSL(host, port, factory, ctx)
-    else:
-        reactor.connectTCP(host, port, factory)
+    if factory: # allow option to start up without immediately creating a client factory.
+        if usessl:
+            ctx = ClientContextFactory()
+            reactor.connectSSL(host, port, factory, ctx)
+        else:
+            reactor.connectTCP(host, port, factory)
     if rs:
         if not gui:
             reactor.run(installSignalHandlers=ish)
