@@ -19,6 +19,15 @@ from jmclient import (jm_single, get_irc_mchannels,
                       RegtestBitcoinCoreInterface)
 import jmbitcoin as btc
 
+# module level variable representing the port
+# on which the daemon is running.
+# note that this var is only set if we are running
+# client+daemon in one process.
+daemon_serving_port = -1
+daemon_serving_host = ""
+
+def get_daemon_serving_params():
+    return (daemon_serving_host, daemon_serving_port)
 
 jlog = get_log()
 
@@ -546,6 +555,8 @@ def start_reactor(host, port, factory, ish=True, daemon=False, rs=True,
     #(Cannot start the reactor in tests)
     #Not used in prod (twisted logging):
     #startLogging(stdout)
+    global daemon_serving_host
+    global daemon_serving_port
     usessl = True if jm_single().config.get("DAEMON", "use_ssl") != 'false' else False
     if daemon:
         try:
@@ -574,11 +585,14 @@ def start_reactor(host, port, factory, ish=True, daemon=False, rs=True,
                     jlog.error("Tried 100 ports but cannot listen on any of them. Quitting.")
                     sys.exit(EXIT_FAILURE)
                 port += 1
+        daemon_serving_port = port
+        daemon_serving_host = host
     else:
         # if daemon run separately, and we do p2ep, we are using
         # the protocol server at port+1
         if p2ep:
             port += 1
+
     if factory: # allow option to start up without immediately creating a client factory.
         if usessl:
             ctx = ClientContextFactory()
