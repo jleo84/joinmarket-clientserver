@@ -1282,6 +1282,65 @@ class PSBTWalletMixin(object):
         else:
             return (signresult, new_psbt), None
 
+    @staticmethod
+    def strip_nonwitness_test_only(b64_ser_psbt):
+        """
+        * ONLY FOR TESTING.
+        * Only makes sense for all-segwit-input transactions.
+
+        A utility function for testing of PSBT
+        parsing interoperability; will be removed once
+        python-bitcointx allows simultaneous witness and
+        non-witness utxo fields.
+        Takes an existing base64 PSBT string and deserializes,
+        strips any non-witness utxo fields and reserializes.
+        Sanity checks should then be done as normal when the
+        caller deserializes the stripped version.
+        Returns a base64 encoded ascii string.
+        """
+        from io import BytesIO
+        from collections import OrderedDict
+        from bitcointx.core.serialize import ser_read
+        from bitcointx.core.psbt import PSBT_MAGIC_HEADER_BYTES, read_psbt_keymap,\
+                                         PSBT_GlobalKeyType, PSBT_InKeyType,\
+                                         PSBT_OutKeyType, stream_serialize_field,\
+                                         PSBT_SEPARATOR
+
+        psbt_bin = BytesIO(base64.b64decode(b64_ser_psbt))
+        output_stream = BytesIO()
+        magic = ser_read(psbt_bin, 5)
+        if magic != PSBT_MAGIC_HEADER_BYTES:
+            raise SerializationError('Invalid PSBT magic bytes')
+        output_stream.write(magic)
+        unsigned_tx = None
+        for key_type, key_data, value in read_psbt_keymap(psbt_bin, set(),
+                                    PSBT_GlobalKeyType, OrderedDict(), list()):
+            if key_type == PSBT_GlobalKeyType.UNSIGNED_TX:
+                unsigned_tx = btc.CTransaction.deserialize(value)
+            stream_serialize_field(
+                PSBT_GlobalKeyType.UNSIGNED_TX, output_stream,
+                value=unsigned_tx.serialize(include_witness=False))
+        assert unsigned_tx
+        output_stream.write(PSBT_SEPARATOR)
+        for input_index in range(len(unsigned_tx.vin)):
+            for key_type, key_data, value in read_psbt_keymap(
+                psbt_bin, set(), PSBT_InKeyType, OrderedDict(),
+                list()):
+                # stripping here:
+                if key_type != PSBT_InKeyType.NON_WITNESS_UTXO:
+                    stream_serialize_field(key_type, output_stream,
+                                           key_data=key_data, value=value)
+            output_stream.write(PSBT_SEPARATOR)
+        for output_index in range(len(unsigned_tx.vout)):
+            for key_type, key_data, value in read_psbt_keymap(
+                psbt_bin, set(), PSBT_OutKeyType, OrderedDict(),
+                list()):
+                stream_serialize_field(key_type, output_stream,
+                                       key_data=key_data, value=value)
+                print(key_type, key_data, value)
+            output_stream.write(PSBT_SEPARATOR)
+        return base64.b64encode(output_stream.getvalue()).decode("ascii")
+
 class SNICKERWalletMixin(object):
 
     SUPPORTED_SNICKER_VERSIONS = bytes([0, 1])

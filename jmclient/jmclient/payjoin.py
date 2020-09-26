@@ -812,8 +812,14 @@ class PayjoinServer(Resource):
         payment_psbt_base64 = proposed_tx.read()
         log.debug("request content: " + bintohex(payment_psbt_base64))
         try:
+            payment_psbt_stripped = PSBTWalletMixin.strip_nonwitness_test_only(
+                payment_psbt_base64)
+        except Exception as e:
+            log.debug("Initial parsing of request failed, error was: " + repr(e))
+
+        try:
             payment_psbt = btc.PartiallySignedTransaction.from_base64(
-            payment_psbt_base64)
+            payment_psbt_stripped)
         except:
             return self.bip78_error(request,
                                     "invalid psbt format",
